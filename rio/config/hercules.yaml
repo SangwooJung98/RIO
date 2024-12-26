@@ -3,7 +3,7 @@ useWeightedResiduals: true
 
 useDopplerResidual: true
 usePoint2PointResidual: true
-radarType: 0 # 0: ARS548, 1: ColoRadar, 2: NTU (oculii)
+radarType: 2 # 0: ARS548, 1: ColoRadar, 2: NTU (oculii)
 
 # Radar sensor configuration
 SigmaRange: 0.05
@@ -23,9 +23,9 @@ dopplerResidualWeight: 1500
 pointResidualWeight: 1000
 
 # ROS configuration
-radarSubTopic: /radar_raw_message
-imuSubTopic: /mavros/imu/data
-nav_gtSubTopic: /pos_vel_mocap/odom_TA
+radarSubTopic: /continental/points
+imuSubTopic: /imu/data_raw
+# nav_gtSubTopic: /pos_vel_mocap/odom_TA
 posePubTopic: /estimated_pose
 pathPubTopic: /estimated_path
 framePubTopic: /radar_frame

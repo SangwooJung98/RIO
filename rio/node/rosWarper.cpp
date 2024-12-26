@@ -240,6 +240,88 @@ std::vector<Frame::RadarData> RIO::decodeRadarMsg_ColoRadar(
   return result;
 }
 
+std::vector<Frame::RadarData> RIO::decodeRadarMsg_Oculii(
+    const sensor_msgs::PointCloud2 &msg) {
+  std::vector<Frame::RadarData> result;
+  int pointBytes = static_cast<int>(msg.point_step);
+  int offsetX = 0;
+  int offsetY = 0;
+  int offsetZ = 0;
+  int offsetV = 0;
+  int offsetR = 0;
+  int offsetRCS = 0;
+  int offsetAzimuth = 0;
+  int offsetElevation = 0;
+  
+  const auto &fields = msg.fields;
+  for (auto i = 0; i < fields.size(); i++) {
+    if (fields[i].name == "x")
+      offsetX = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "y")
+      offsetY = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "z")
+      offsetZ = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "v")
+      offsetV = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "r")
+      offsetR = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "RCS")
+      offsetRCS = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "azimuth")
+      offsetAzimuth = static_cast<int>(fields[i].offset);
+    else if (fields[i].name == "elevation")
+      offsetElevation = static_cast<int>(fields[i].offset);
+  }
+  pcl::PointCloud<pcl::PointXYZI> pointCloud;
+
+  for (auto i = 0; i < msg.width; i++) {
+    float xValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetX));
+    float yValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetY));
+    float zValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetZ));
+    float vValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetV));
+    float rValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetR));
+    float rcsValue = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetRCS));
+    float azimuth = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetAzimuth));
+    float elevation = *reinterpret_cast<const float *>(
+        msg.data.data() + static_cast<ptrdiff_t>(pointBytes * i + offsetElevation));
+
+    Frame::RadarData currentData{};
+    currentData.x = xValue;
+    currentData.y = yValue;
+    currentData.z = zValue;
+    currentData.range = rValue;
+    currentData.doppler = vValue;
+    currentData.rcs = rcsValue;
+    currentData.azimuth = azimuth;
+    currentData.elevation = elevation;
+    // Frame::RadarData::xyzToAngles(currentData);
+    // Frame::RadarData::intensityToRCS(currentData);
+    result.emplace_back(currentData);
+
+    pcl::PointXYZI point;
+    point.x = xValue;
+    point.y = yValue;
+    point.z = zValue;
+    point.intensity = rcsValue;
+
+    pointCloud.emplace_back(point);
+  }
+
+  sensor_msgs::PointCloud2 pubMsg;
+  pcl::toROSMsg(pointCloud, pubMsg);
+  pubMsg.header.frame_id = "world";
+  framePub.publish(pubMsg);
+  return result;
+}
+
+
 void RIO::factorGraphInit(std::vector<Frame::RadarData> &frameRadarData,
                           const ros::Time &timeStamp) {
   for (auto pts : frameRadarData) {
@@ -746,6 +828,8 @@ void RIO::radarCallback(const sensor_msgs::PointCloud2 &msg) {
     frameRadarData = decodeRadarMsg_ARS548(msg);
   else if (radarType == ColoRadar)
     frameRadarData = decodeRadarMsg_ColoRadar(msg);
+  else if (radarType == Oculii)
+    frameRadarData = decodeRadarMsg_Oculii(msg);
   else
     ROS_ERROR("Unknown radar type");
 
@@ -782,7 +866,13 @@ void RIO::imuCallback(const sensor_msgs::Imu &msg) {
                           -msg.linear_acceleration.z};
     gyro = Eigen::Vector3d{msg.angular_velocity.x, -msg.angular_velocity.y,
                            -msg.angular_velocity.z};
-  } else {
+  } else if (radarType == Oculii) {
+    acc = Eigen::Vector3d{msg.linear_acceleration.x, msg.linear_acceleration.y,
+                          msg.linear_acceleration.z};
+    gyro = Eigen::Vector3d{msg.angular_velocity.x, msg.angular_velocity.y,
+                           msg.angular_velocity.z};
+  }
+  else {
     ROS_ERROR("Unknown radar type");
   }
   frame.receivedTime = msg.header.stamp;
@@ -818,6 +908,9 @@ void RIO::imuCallback(const sensor_msgs::Imu &msg) {
         Eigen::Quaterniond quatRadarToBase{0.707388269167, 0.0, 0.0,
                                            0.706825181105};
         radarExParam.vec = Eigen::Vector3d{-0.09, -0.145, 0.025};
+        radarExParam.rot.setIdentity();
+      } else if (radarType == Oculii) {
+        radarExParam.vec.setZero();
         radarExParam.rot.setIdentity();
       } else {
         ROS_ERROR("Unknown radar type");

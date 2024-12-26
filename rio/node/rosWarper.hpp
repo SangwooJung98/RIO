@@ -55,7 +55,7 @@ constexpr int PUB_QUEUE_SIZE = 100;
 constexpr float DEG_TO_RAD = 3.1415926 / 180;
 
 // Enum
-enum RadarType { ARS548, ColoRadar };
+enum RadarType { ARS548, ColoRadar, Oculii };
 
 class RIO {
  private:
@@ -152,6 +152,8 @@ class RIO {
   std::vector<Frame::RadarData> decodeRadarMsg_ARS548(
       const sensor_msgs::PointCloud2 &msg);
   std::vector<Frame::RadarData> decodeRadarMsg_ColoRadar(
+      const sensor_msgs::PointCloud2 &msg);
+  std::vector<Frame::RadarData> decodeRadarMsg_Oculii(
       const sensor_msgs::PointCloud2 &msg);
 
   // Estimator
